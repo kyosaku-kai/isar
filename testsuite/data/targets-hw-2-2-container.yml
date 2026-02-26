@@ -1,0 +1,38 @@
+a: !mux
+  rpi-arm-bullseye:
+    name: rpi-arm-bullseye
+  rpi-arm-bookworm:
+    name: rpi-arm-bookworm
+  rpi-arm-v7-bullseye:
+    name: rpi-arm-v7-bullseye
+  rpi-arm-v7-bookworm:
+    name: rpi-arm-v7-bookworm
+  rpi-arm-v7l-bullseye:
+    name: rpi-arm-v7l-bullseye
+  rpi-arm-v7l-bookworm:
+    name: rpi-arm-v7l-bookworm
+  rpi-arm64-v8-bullseye:
+    name: rpi-arm64-v8-bullseye
+  rpi-arm64-v8-bookworm:
+    name: rpi-arm64-v8-bookworm
+  rpi-arm64-v8-efi-bookworm:
+    name: rpi-arm64-v8-efi-bookworm
+  starfive-visionfive2-trixie:
+    name: starfive-visionfive2-trixie
+  container-amd64-buster:
+    name: container-amd64-buster
+  container-amd64-bullseye:
+    name: container-amd64-bullseye
+  container-amd64-bookworm:
+    name: container-amd64-bookworm
+  container-amd64-trixie:
+    name: container-amd64-trixie
+  virtualbox-bullseye:
+    name: virtualbox-bullseye
+  virtualbox-bookworm:
+    name: virtualbox-bookworm
+  virtualbox-trixie:
+    name: virtualbox-trixie
+b: !mux
+  base:
+    image: isar-image-base

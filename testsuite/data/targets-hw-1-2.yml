@@ -1,0 +1,42 @@
+a: !mux
+  bananapi-buster:
+    name: bananapi-buster
+  bananapi-bullseye:
+    name: bananapi-bullseye
+  bananapi-bookworm:
+    name: bananapi-bookworm
+  bananapi-trixie:
+    name: bananapi-trixie
+  de0-nano-soc-buster:
+    name: de0-nano-soc-buster
+  de0-nano-soc-bullseye:
+    name: de0-nano-soc-bullseye
+  de0-nano-soc-bookworm:
+    name: de0-nano-soc-bookworm
+  de0-nano-soc-trixie:
+    name: de0-nano-soc-trixie
+  hikey-bullseye:
+    name: hikey-bullseye
+  hikey-bookworm:
+    name: hikey-bookworm
+  hikey-trixie:
+    name: hikey-trixie
+  phyboard-mira-bullseye:
+    name: phyboard-mira-bullseye
+  phyboard-mira-bookworm:
+    name: phyboard-mira-bookworm
+  phyboard-mira-trixie:
+    name: phyboard-mira-trixie
+  nanopi-neo-buster:
+    name: nanopi-neo-buster
+  nanopi-neo-bullseye:
+    name: nanopi-neo-bullseye
+  nanopi-neo-bookworm:
+    name: nanopi-neo-bookworm
+  nanopi-neo-trixie:
+    name: nanopi-neo-trixie
+  nanopi-neo-efi-bookworm:
+    name: nanopi-neo-efi-bookworm
+b: !mux
+  base:
+    image: isar-image-base
