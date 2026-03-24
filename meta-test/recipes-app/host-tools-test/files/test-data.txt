@@ -1,0 +1,2 @@
+This is test data for the host-tools bbclass validation.
+It should be extracted to STAGING_DIR_HOST during do_deploy.
