@@ -13,6 +13,13 @@ addhandler build_started
 python build_started() {
     bb.utils.remove(d.getVar('TMPDIR') + "/work/*/*/*/temp/once.*")
     bb.utils.remove(d.getVar('TMPDIR') + "/work/*/*/*/rootfs.mount")
+    # Recipes may relocate WORKDIR outside tmp/work/ (e.g. meta-tegra's
+    # tegra-binaries, gcc-for-nvcc, gcc-source-for-nvcc set WORKDIR under
+    # tmp/work-shared/ so BSP tarballs are shared across recipes). Those
+    # once.* stamps escape the glob above and leak across invocations,
+    # causing a spurious "Detect multiple executions of do_X" on the next
+    # build after any sighash-invalidating change. Cover work-shared too.
+    bb.utils.remove(d.getVar('TMPDIR') + "/work-shared/*/temp/once.*")
 }
 build_started[eventmask] = "bb.event.BuildStarted"
 
