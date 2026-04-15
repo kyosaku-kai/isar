@@ -13,6 +13,7 @@ BitBake build tools.
 # Based on functions from the base bb module, Copyright 2003 Holger Schurig
 
 import os, re
+import shutil
 import signal
 import logging
 import urllib.request, urllib.parse, urllib.error
@@ -1525,11 +1526,13 @@ class FetchMethod(object):
             elif file.endswith('.tgz') or file.endswith('.tar.gz') or file.endswith('.tar.Z'):
                 cmd = '%s -z -f %s' % (tar_cmd, file)
             elif file.endswith('.tbz') or file.endswith('.tbz2') or file.endswith('.tar.bz2'):
-                cmd = 'bzip2 -dc %s | %s -f -' % (file, tar_cmd)
+                bz2_cmd = next((c for c in ('lbzip2', 'pbzip2') if shutil.which(c)), 'bzip2')
+                cmd = '%s -dc %s | %s -f -' % (bz2_cmd, file, tar_cmd)
             elif file.endswith('.gz') or file.endswith('.Z') or file.endswith('.z'):
                 cmd = 'gzip -dc %s > %s' % (file, efile)
             elif file.endswith('.bz2'):
-                cmd = 'bzip2 -dc %s > %s' % (file, efile)
+                bz2_cmd = next((c for c in ('lbzip2', 'pbzip2') if shutil.which(c)), 'bzip2')
+                cmd = '%s -dc %s > %s' % (bz2_cmd, file, efile)
             elif file.endswith('.txz') or file.endswith('.tar.xz'):
                 cmd = 'xz -dc %s | %s -f -' % (file, tar_cmd)
             elif file.endswith('.xz'):
