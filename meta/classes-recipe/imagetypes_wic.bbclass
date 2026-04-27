@@ -219,9 +219,15 @@ merge_wic_sbom() {
     INITRAMFS_FULLNAME="${@ d.getVar('INITRD_DEPLOY_FILE').removesuffix('-initrd.img') }"
     sbom_document_uuid="${@d.getVar('SBOM_DOCUMENT_UUID') or generate_document_uuid(d, False)}"
 
+    sbom_tmp=$(mktemp)
     cat ${DEPLOY_DIR_IMAGE}/${ROOTFS_PACKAGE_SUFFIX}.$BOMTYPE.json \
         ${@ '${DEPLOY_DIR_IMAGE}/$INITRAMFS_FULLNAME.$BOMTYPE.json' if d.getVar('IMAGE_INITRD') else '' } \
-        ${WORKDIR}/imager.$BOMTYPE.json 2>/dev/null | \
+        ${WORKDIR}/imager.$BOMTYPE.json > "$sbom_tmp" 2>/dev/null || true
+    if [ ! -s "$sbom_tmp" ]; then
+        bbwarn "merge_wic_sbom: no sbom fragments found for ${IMAGE_FULLNAME} ($BOMTYPE); skipping merge"
+        rm -f "$sbom_tmp"
+        return 0
+    fi
     bwrap \
         --unshare-user \
         --unshare-pid \
@@ -232,5 +238,7 @@ merge_wic_sbom() {
             --cdx-serialnumber $sbom_document_uuid \
             --spdx-namespace '${SBOM_SPDX_NAMESPACE_PREFIX}'-$sbom_document_uuid \
             --timestamp $TIMESTAMP - -o - \
+     < "$sbom_tmp" \
      > ${DEPLOY_DIR_IMAGE}/${IMAGE_FULLNAME}.wic.$BOMTYPE.json
+    rm -f "$sbom_tmp"
 }
