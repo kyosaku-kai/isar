@@ -69,6 +69,11 @@ DEPENDS ?= ""
 
 # Machine-specific package arch — host-tools outputs are typically
 # machine-specific (BSP firmware, flash configuration, etc.)
+# MACHINE_ARCH is an OE variable not defined by ISAR. In OE it resolves to
+# TUNE_PKGARCH or MACHINE; ISAR has no tuning, so map to MACHINE directly.
+# Without this, sstate filenames contain literal ${MACHINE_ARCH} causing
+# fetcher ERRORs that make BitBake return non-zero.
+MACHINE_ARCH ?= "${MACHINE}"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
 # Task chain: fetch → unpack → patch → configure → compile → install → deploy → build
