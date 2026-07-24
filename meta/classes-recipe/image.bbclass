@@ -310,7 +310,7 @@ python() {
             localdata.setVar('type', t)
             rm_images.add(localdata.expand('${IMAGE_FILE_HOST}'))
 
-        for image in rm_images:
+        for image in sorted(rm_images):
             cmds.append('\trm ' + image)
 
         # image type dependencies
