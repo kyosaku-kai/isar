@@ -307,7 +307,14 @@ python() {
             create_conversions(t)
 
         if bt not in image_types:
-            localdata.setVar('type', t)
+            # Remove the raw base-type intermediate (e.g. wic) that was only
+            # built as a conversion source. Use bt, not the leaked loop variable
+            # t from the "for t in basetypes[bt]" loop above: when a base type has
+            # more than one conversion chain (e.g. IMAGE_FSTYPES = "wic.qcow2
+            # wic.qcow2.zst"), t leaks as the last-collected fstype ("wic.qcow2.zst")
+            # and this would schedule removal of a requested output instead of the
+            # raw intermediate.
+            localdata.setVar('type', bt)
             rm_images.add(localdata.expand('${IMAGE_FILE_HOST}'))
 
         for image in sorted(rm_images):
