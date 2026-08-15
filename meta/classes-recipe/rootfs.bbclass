@@ -671,12 +671,21 @@ rootfs_install_sstate_prepare() {
     # tar --one-file-system will cross bind-mounts to the same filesystem,
     # so we use some mount magic to prevent that
     mkdir -p ${WORKDIR}/mnt/rootfs
-    trap 'rmdir ${WORKDIR}/mnt/rootfs ${WORKDIR}/mnt' EXIT
+    # Release the bind-mount and drop any partial tar on ANY exit. Together with
+    # the atomic tmp+rename below, an interrupted (SIGTERM/cancel) or failed
+    # (e.g. ENOSPC) tar can never leave a truncated rootfs.tar under the final
+    # name to be sealed into the sstate package and poison the shared cache.
+    trap 'sudo umount ${WORKDIR}/mnt/rootfs 2>/dev/null || true; \
+          sudo rm -f rootfs.tar.tmp; \
+          rmdir ${WORKDIR}/mnt/rootfs ${WORKDIR}/mnt 2>/dev/null || true' EXIT
     sudo mount -o bind,private '${WORKDIR}/rootfs' '${WORKDIR}/mnt/rootfs' -o ro
     lopts="--one-file-system --exclude=var/cache/apt/archives"
-    sudo tar -C ${WORKDIR}/mnt -cpSf rootfs.tar $lopts ${SSTATE_TAR_ATTR_FLAGS} rootfs
-    sudo umount ${WORKDIR}/mnt/rootfs
-    sudo chown $(id -u):$(id -g) rootfs.tar
+    # Write to a temp file, then atomically rename into place only after tar
+    # fully succeeds (same-directory mv == rename(2)). BitBake runs tasks with
+    # set -e, so a non-zero tar aborts before the rename and no partial is sealed.
+    sudo tar -C ${WORKDIR}/mnt -cpSf rootfs.tar.tmp $lopts ${SSTATE_TAR_ATTR_FLAGS} rootfs
+    sudo chown $(id -u):$(id -g) rootfs.tar.tmp
+    mv rootfs.tar.tmp rootfs.tar
 }
 do_rootfs_install_sstate_prepare[lockfiles] = "${REPO_ISAR_DIR}/isar.lock"
 
