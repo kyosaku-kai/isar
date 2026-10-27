@@ -238,6 +238,15 @@ schroot_end_session() {
     # fallback enabled the lazy-detach above has freed the path, so this succeeds.
     schroot -e -c "${sid}"
 }
+# schroot_end_session calls schroot_mount_holders only via command substitution
+# ("$(schroot_mount_holders ...)"). BitBake's shell codeparser (bb.codeparser.
+# ShellParser) does NOT descend into $(...) embedded in an assignment word, so it
+# never records schroot_mount_holders as an exec dependency and omits its
+# definition from the generated run.do_image_* script - the function then fails
+# at runtime with "schroot_mount_holders: not found" (exit 127). Declare the
+# dependency explicitly: emit_func() unions [vardeps] into the emitted-function
+# set, which both ships the definition AND ties the caller's signature to it.
+schroot_end_session[vardeps] += "schroot_mount_holders"
 
 schroot_configure_ccache() {
     mkdir -p "${CCACHE_DIR}"
