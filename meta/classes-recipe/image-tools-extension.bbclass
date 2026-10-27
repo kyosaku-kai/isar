@@ -77,7 +77,7 @@ EOAPT
         ${@bb.utils.contains('ROOTFS_FEATURES', 'generate-sbom', 'generate_imager_sbom', '', d)}
     fi
 
-    schroot -e -c ${session_id}
+    schroot_end_session ${session_id}
 
     remove_mounts
     schroot_delete_configs

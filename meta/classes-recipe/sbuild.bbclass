@@ -5,6 +5,14 @@ SCHROOT_CONF ?= "/etc/schroot"
 
 SCHROOT_MOUNTS ?= ""
 
+# schroot_end_session() retries a transient-busy `schroot -e` (a build child not
+# yet reaped still holding an fd under a session bind mount). When set to "1" it
+# ADDITIONALLY lazy-unmounts any mount still busy after the retries. OFF by
+# default: the strict umount stays the default so a genuinely forgotten
+# sub-mount still fails loudly (upstream's leak-detection philosophy, ilbers#125);
+# a consumer who accepts the lazy-umount trade-off opts in explicitly.
+SCHROOT_END_LAZY_UMOUNT_FALLBACK ??= "0"
+
 inherit crossvars
 
 SBUILD_CHROOT ?= "${DEBDISTRONAME}-${SCHROOT_USER}-${ISAR_BUILD_UUID}-${@os.getpid()}"
@@ -119,6 +127,109 @@ remove_mounts() {
             sed -i "\|${FSTAB_LINE}|d" ${SBUILD_CONF_DIR}/fstab
         done
 EOSUDO
+}
+
+# List the processes holding an fd / cwd / root / exe anywhere under a mount
+# tree, as "pid(comm)" tokens. Pure /proc scan (readlink), no fuser/lsof
+# dependency; run under sudo so it can read every process's /proc entries. Used
+# by schroot_end_session to wait for mount quiescence AND to NAME the holder in
+# the build log. Takes the mount-tree root as $1.
+schroot_mount_holders() {
+    local mount_root="${1}"
+    sudo bash -c '
+        root="$1"
+        for p in /proc/[0-9]*; do
+            pid="${p#/proc/}"
+            held=""
+            for link in cwd root exe; do
+                tgt="$(readlink "$p/$link" 2>/dev/null)" || continue
+                case "$tgt" in "$root"|"$root"/*) held=1; break;; esac
+            done
+            if [ -z "$held" ] && [ -d "$p/fd" ]; then
+                for fd in "$p"/fd/*; do
+                    tgt="$(readlink "$fd" 2>/dev/null)" || continue
+                    case "$tgt" in "$root"|"$root"/*) held=1; break;; esac
+                done
+            fi
+            [ -n "$held" ] && echo "${pid}($(cat "$p/comm" 2>/dev/null))"
+        done
+    ' _ "${mount_root}" 2>/dev/null | sort -u | tr "\n" " "
+}
+
+# Robustly end a schroot session. schroot's setup-stop runs the bundled
+# 10mount teardown, which umounts the session's bind mounts (WORKDIR, rootfs,
+# DEPLOY_DIR_IMAGE, isar-apt). A transient holder of an open fd under one of
+# those mounts - observed with the imager's do_image_uki (a backgrounded dpkg
+# man-db trigger, or the ukify/sbsign child not yet fully reaped) - makes the
+# umount fail EBUSY ("target is busy") at the instant teardown runs, so
+# `schroot -e` exits non-zero and, under the task's `set -e`, hard-fails the
+# task even though the artifact was already written and is correct.
+#
+# ROOT CAUSE: a process spawned during the build step detached from ISAR's
+# synchronous wait (schroot -r blocks on its direct child, but a reparented /
+# daemonized grandchild escapes it) and is still alive, holding an fd under a
+# session bind mount, when the session ends. schroot is not a strong boundary
+# (shared host PID namespace + host bind mounts), so such a process can outlive
+# the "session" and pin a host-visible mount. The structural fix is the unshare
+# / PID-namespace chroot mode (post-v1.1 upstream), tracked as a separate task.
+#
+# INTERIM FIX (deterministic quiescence, NOT a blind retry): wait for the actual
+# condition - no process holding a mount under the session tree - polling with a
+# timeout, and LOG the holders each poll so the escaping process is NAMED in the
+# build log (root-cause diagnostics). Then end the session once, strictly: a
+# mount still busy after the wait is genuinely stuck and `schroot -e` fails
+# loudly, preserving upstream's forgotten-sub-mount detection (ilbers#125).
+#
+# SCHROOT_END_LAZY_UMOUNT_FALLBACK=1 (opt-in, default 0) additionally
+# lazy-unmounts any mount still busy after the wait, trading that loud failure
+# for completion; even then it LOGS every mount it force-detaches.
+#
+# Takes the session id as $1. Callers must use this instead of a bare
+# `schroot -e` wherever a session bind-mounts a directory a build step touches.
+schroot_end_session() {
+    local sid="${1}"
+    local session_mount="/var/run/schroot/mount/${sid}"
+    local waited=0
+    local max_wait=30
+    local holders=""
+
+    sync
+    while [ "${waited}" -lt "${max_wait}" ]; do
+        holders="$(schroot_mount_holders "${session_mount}")"
+        [ -z "${holders}" ] && break
+        echo "schroot teardown ${sid}: mount held, waiting to quiesce (${waited}s/${max_wait}s): ${holders}"
+        sync
+        sleep 2
+        waited=$((waited + 2))
+    done
+    if [ -n "${holders}" ]; then
+        echo "schroot teardown ${sid}: still held after ${max_wait}s by: ${holders}"
+    fi
+
+    if schroot -e -c "${sid}" 2>/dev/null; then
+        return 0
+    fi
+
+    if [ "${SCHROOT_END_LAZY_UMOUNT_FALLBACK}" = "1" ]; then
+        # Opt-in last resort: lazily detach any bind mounts still lingering under
+        # the session mount dir (deepest first). umount -l detaches immediately
+        # and frees the path once the stray fd closes. Each detach is LOGGED so a
+        # genuine forgotten sub-mount is still visible in the build log.
+        echo "schroot teardown ${sid}: still busy after the quiesce wait; SCHROOT_END_LAZY_UMOUNT_FALLBACK=1, forcing lazy-unmount"
+        if [ -d "${session_mount}" ]; then
+            awk -v p="${session_mount}" '$2 == p || index($2, p "/") == 1 { print $2 }' /proc/mounts \
+                | sort -r \
+                | while read -r mp; do
+                    echo "  lazy-unmounting still-busy mount: ${mp}"
+                    sudo umount -l "${mp}" 2>/dev/null || true
+                done
+        fi
+    fi
+
+    # Final attempt. In the default (strict) mode a mount still busy here is
+    # genuinely stuck and this fails loudly, as upstream intends. With the
+    # fallback enabled the lazy-detach above has freed the path, so this succeeds.
+    schroot -e -c "${sid}"
 }
 
 schroot_configure_ccache() {
