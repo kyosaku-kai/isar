@@ -200,7 +200,14 @@ schroot_end_session() {
         echo "schroot teardown ${sid}: mount held, waiting to quiesce (${waited}s/${max_wait}s): ${holders}"
         sync
         sleep 2
-        waited=$((waited + 2))
+        # NOTE: BitBake's bundled shell parser (bb/pysh) does NOT implement the
+        # POSIX arithmetic expansion $(( ... )) and raises NotImplementedError at
+        # PARSE time for any recipe/class that inherits this function - it has no
+        # bearing on runtime. Use `expr` (plain command substitution, which the
+        # parser does support) instead. `waited` starts at 0 and only increases,
+        # so `expr` never yields 0 and cannot trip the task's `set -e` via its
+        # result-is-zero exit status.
+        waited=$(expr "${waited}" + 2)
     done
     if [ -n "${holders}" ]; then
         echo "schroot teardown ${sid}: still held after ${max_wait}s by: ${holders}"
